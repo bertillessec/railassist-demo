@@ -1,294 +1,236 @@
-# Microsoft Foundry Agent Service Starter Kit
+# RailAssist — Multi-Agent AI for Railway Operations
 
-[![Open in GitHub Codespaces](https://img.shields.io/static/v1?style=for-the-badge&label=GitHub+Codespaces&message=Open&color=brightgreen&logo=github)](https://codespaces.new/NicoGrassetto/DressMate)
-[![Open in Dev Containers](https://img.shields.io/static/v1?style=for-the-badge&label=Dev+Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/NicoGrassetto/DressMate)
+A reference implementation of a production-grade multi-agent system built on **Azure AI Foundry Agent Service**. RailAssist demonstrates how specialised AI agents can collaborate to answer complex passenger questions — timetables, disruptions, regulations, compensation, and operational analytics — grounded in enterprise knowledge and real operational data.
 
-Welcome to the Microsoft Foundry Agent Service Starter Kit. It's a lightweight template for building AI agents powered by **Microsoft Foundry Agent Service**. This solution accelerator uses Azure AI Services, Azure Blob Storage, and Bing Grounding, with Bicep infrastructure-as-code and `azd` deployment automation.
+> Built on top of the internal [Foundry Agent Service Starter Kit](https://github.com/NicoGrassetto/Foundry-Agent-Service-Starter-Kit) by Nico Grassetto.
 
-Microsoft Foundry Agent Service is a powerful platform for building intelligent, tool-augmented AI agents. Designed for developers creating conversational AI workflows, it streamlines the process of orchestrating models with built-in tools — including Function calling, Code Interpreter, File Search, and Bing Grounding — into a single, cohesive interface. This eliminates the need for complex custom orchestration logic or manual tool integration, enabling scalable, low-latency agent interactions across diverse use cases. Whether you're building internal copilots, customer-facing assistants, or domain-specific reasoning agents, Microsoft Foundry Agent Service delivers production-ready results that integrate seamlessly into your business logic.
+## Scenario
 
-Learn more about [Microsoft Foundry Agent Service](https://learn.microsoft.com/en-us/azure/ai-foundry/agents/overview).
+A national railway operator wants to automate a significant share of passenger interactions. The system must:
 
-<p align="center">
-  <a href="#project-structure">Project Structure</a> |
-  <a href="#prerequisites">Prerequisites</a> |
-  <a href="#quick-start">Quick Start</a> |
-  <a href="#manual-setup">Manual Setup</a> |
-  <a href="#usage">Usage</a> |
-  <a href="#built-in-tools">Built-in Tools</a> |
-  <a href="#customization">Customization</a> |
-  <a href="#new-tools">New Tools</a> |
-  <a href="#new-agents">New Agents</a> |
-  <a href="#infrastructure">Infrastructure</a> |
-  <a href="#pricing">Pricing</a> |
-  <a href="#resources">Resources</a>
-</p>
+- Answer routine questions 24/7 (timetables, fares, rules)
+- Handle disruptions and propose alternatives in real time
+- Process delay compensation claims per EU Regulation EC 1371/2007
+- Ground responses in official regulatory documents
+- Surface operational analytics (punctuality, delays, causes) in plain language
+- Coordinate across multiple domains when passenger questions span several areas
 
-<p align="center">
-  <img src="assets/what-is-an-agent.png" alt="What is an Agent" width="800" />
-</p>
-
-## Project Structure
+## Architecture
 
 ```
-├── infra/
-│   ├── main.bicep            # Azure infrastructure (AI Services, Storage, Bing Grounding)
-│   └── main.bicepparam       # Parameter values
+                     ┌──────────────────────────┐
+                     │   RailAssist Orchestrator │
+                     │  (Connected Agents hub)   │
+                     └───────────┬───────────────┘
+                                 │
+        ┌────────────────┬───────┴────────┬────────────────┐
+        ▼                ▼                ▼                ▼
+  ┌──────────┐    ┌──────────────┐   ┌──────────┐    ┌────────────┐
+  │ Schedule │    │  Passenger   │   │ Incident │    │ Knowledge  │
+  │  Agent   │    │ServiceAgent  │   │  Agent   │    │   Agent    │
+  └────┬─────┘    └──────┬───────┘   └────┬─────┘    └─────┬──────┘
+       │                 │                 │                │
+       ▼                 ▼                 ▼                ▼
+  Code Interp.    Code Interp.       Code Interp.   Azure AI Search
+  (timetables)    (fare rules)       (disruptions)  (rail-knowledge)
+```
+
+Plus a separate **Fabric Data Agent** that queries a lakehouse for operational analytics.
+
+### Agents
+
+| Agent | Role | Tools |
+|-------|------|-------|
+| `RailAssist` | Orchestrator — routes questions to specialists | 4x ConnectedAgentTool |
+| `ScheduleAgent` | Timetables, connections, real-time tracking | Code Interpreter |
+| `PassengerServiceAgent` | Tickets, fares, delay compensation | Code Interpreter |
+| `IncidentAgent` | Disruptions, planned works, alternatives | Code Interpreter |
+| `KnowledgeAgent` | RAG over official documentation | Azure AI Search |
+| `FabricAgent` (separate) | Operational analytics on lakehouse | Fabric Data Agent |
+
+### Data layer
+
+- **Azure AI Search** — 10 indexed regulatory documents (passenger rights, fare policies, safety rules, network info)
+- **Microsoft Fabric Lakehouse** — operational punctuality dataset (`train_punctuality`)
+- **Code Interpreter** — dynamic analysis and realistic data generation
+
+## What's in the repo
+
+```
+railassist-demo/
 ├── src/
-│   ├── __init__.py
-│   ├── config.py             # Centralised configuration from env
-│   ├── setup.py              # One-time agent creation (writes AGENT_ID to .env)
-│   ├── main.py               # CLI entry point (interactive conversation loop)
 │   ├── agents/
-│   │   ├── __init__.py
-│   │   └── agent.py          # Agent factory, retrieval, and toolset builder
+│   │   └── registry.py          # Declarative agent registry
 │   ├── prompts/
-│   │   └── agent.prompty     # System prompt (Prompty format)
-│   └── tools/
-│       ├── __init__.py
-│       └── math.py           # Sample Function tool (math operations)
-├── hooks/
-│   ├── preprovision.sh       # Auto-detects max GPT-4o quota before deploy
-│   └── postprovision.sh      # Auto-writes .env and creates agent(s) after azd provision
-├── azure.yaml                # azd project descriptor
-├── .env.example
-├── .gitignore
-├── requirements.txt
-└── README.md
+│   │   ├── railassist.prompty   # Orchestrator instructions
+│   │   ├── schedule.prompty     # ScheduleAgent instructions
+│   │   ├── passenger.prompty    # PassengerServiceAgent instructions
+│   │   └── incident.prompty     # IncidentAgent instructions
+│   ├── tools/
+│   │   ├── schedule.py          # Schedule-related function tools
+│   │   ├── passenger.py         # Passenger service function tools
+│   │   └── incident.py          # Incident function tools
+│   ├── setup.py                 # Factory: creates agents + wires ConnectedAgentTool
+│   ├── main.py                  # CLI entry point
+│   └── config.py                # Config loader (.env)
+├── railassist-ui/               # React frontend (Vite) with live pipeline panel
+│   └── src/App.jsx              # Main UI component
+├── api.py                       # FastAPI backend — proxies to Foundry + extracts run_steps
+├── create_index.py              # Creates Azure AI Search index + uploads 10 docs
+├── rebuild_agents.py            # Recreates all 5 agents from scratch
+├── train_punctuality.csv        # Fabric lakehouse seed data
+├── connection.yml               # AI Search connection for Foundry
+└── .env                         # Endpoint + agent IDs
 ```
 
 ## Prerequisites
 
-- An **Azure subscription**
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed and signed in
-- [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) (optional, for one-command deploy)
-- Python 3.9+
+- Python 3.11+
+- Node.js 20+
+- Azure subscription with:
+  - An Azure AI Foundry project
+  - An Azure AI Search service (Basic or higher)
+  - A Microsoft Fabric capacity (F2 or higher)
+- Model deployment: `gpt-4.1-mini` in your Foundry project
+- Azure CLI authenticated (`az login`)
 
-## Quick Start
+## Setup
 
-```bash
-azd up                  # provisions infra, writes .env, and creates agent(s) via post-provision hook
-python -m src.main      # runs the conversation loop against the persisted agent
-```
+### 1. Clone and install
 
-## Manual Setup
+```powershell
+git clone https://github.com/bertillessec/railassist-demo.git
+cd railassist-demo
 
-### 1. Deploy Infrastructure
-
-```bash
-az group create --name my-agent-rg --location eastus
-
-az deployment group create \
-  --resource-group my-agent-rg \
-  --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam
-```
-
-### 2. Configure Environment
-
-```bash
-cp .env.example .env
-# Fill in AZURE_AI_ENDPOINT and BING_CONNECTION_ID from deployment outputs
-```
-
-### 3. Install & Create Agent
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
-
-az login
-python -m src.setup     # creates agent, writes AGENT_ID to .env
+pip install fastapi uvicorn
 ```
 
-### 4. Run
+### 2. Configure environment
 
-```bash
-python -m src.main      # reuses the persisted agent — no re-creation
+Create `.env` at the repo root:
+
+```
+AZURE_AI_ENDPOINT=https://<your-resource>.services.ai.azure.com/api/projects/<your-project>
+MODEL_NAME=gpt-4.1-mini
 ```
 
-### 5. Tear Down
+### 3. Create the AI Search index
 
-To delete all provisioned Azure resources:
-
-**With `azd`:**
-
-```bash
-azd down --purge
+```powershell
+python create_index.py
 ```
 
-**Manual:**
+Indexes 10 regulatory documents into the `rail-knowledge` index.
 
-```bash
-az group delete --name my-agent-rg --yes --no-wait
+### 4. Create the Fabric lakehouse
+
+1. In the Fabric portal, create a workspace `RailAssist-Analytics`
+2. Create a Lakehouse named `rail_operations`
+3. Upload `train_punctuality.csv` and load to a Delta table
+4. Use **Add to data agent** to create a `RailAnalytics` data agent
+
+### 5. Register the AI Search connection in Foundry
+
+```powershell
+az cognitiveservices account connection create `
+  --file connection.yml `
+  --connection-name railassist-search-conn `
+  --resource-group <rg> `
+  --name <foundry-resource>
 ```
 
-## Usage
+### 6. Create the 5 agents
 
-Start an interactive conversation with a registered agent:
-
-```bash
-python -m src.main [agent-key]
+```powershell
+python rebuild_agents.py
 ```
 
-- If only one agent is registered, the key can be omitted.
-- If multiple agents exist, specify which one to use (e.g. `python -m src.main default`).
-- Type your message and press Enter to chat. The agent will use its configured tools automatically.
-- Type `quit`, `exit`, or `q` to end the session.
+This writes the agent IDs to `.env`.
 
-**Docker:**
+## Running the demo
 
-```bash
-docker build -t foundry-agent .
-docker run --env-file .env -it foundry-agent
+### CLI mode (single agent or orchestrator)
+
+```powershell
+python -m src.main schedule      # Talk to ScheduleAgent directly
+python -m src.main railassist    # Talk to the full orchestrator
 ```
 
-To run a specific agent in Docker:
+### Web UI mode
 
-```bash
-docker run --env-file .env -it foundry-agent python -m src.main default
+**Terminal 1 — Backend:**
+
+```powershell
+python -m uvicorn api:app --port 8000
 ```
 
-## Built-in Tools
+**Terminal 2 — Frontend:**
 
-### Implemented
+```powershell
+cd railassist-ui
+npm install
+npm run dev
+```
 
-| Tool | Description | Pricing |
-|---|---|---|
-| **Function** | Custom Python function called by the agent (sample: `query_items`) | Free (runs in your process) |
-| **Code Interpreter** | Sandboxed Python execution for data analysis and calculations | [Pricing](https://azure.microsoft.com/pricing/details/ai-studio/) |
-| **File Search** | Managed RAG over uploaded documents (vector store) | [Pricing](https://azure.microsoft.com/pricing/details/ai-studio/) |
-| **Bing Grounding** | Web search for real-time information | [Pricing](https://www.microsoft.com/en-us/bing/apis/grounding-pricing) |
+Open `http://localhost:5173`. Toggle the **Pipeline** panel to see which agent gets called and which tool is invoked in real time.
 
-### Available (not implemented)
+## Demo scenarios
 
-The following tools are offered by Microsoft Foundry Agent Service but are **not yet wired up** in this starter kit:
+| Question | Agent | Tool |
+|----------|-------|------|
+| Next departures from Brussels-Midi? | ScheduleAgent | Code Interpreter |
+| What are the rules for bikes on trains? | KnowledgeAgent | Azure AI Search |
+| Any disruptions right now? | IncidentAgent | Code Interpreter |
+| My train was 45 min late, compensation? | PassengerServiceAgent | Code Interpreter |
+| Punctuality rate by line? | Fabric Data Agent | Lakehouse SQL |
+| Delay → alternatives + compensation? | Multi-agent | Multiple |
 
-| Tool | Description | Pricing |
-|---|---|---|
-| **Azure AI Search** | Enterprise RAG over Azure AI Search indexes with integrated vectorisation | [Pricing](https://azure.microsoft.com/pricing/details/search/) |
-| **Azure Functions** | Call an Azure Function as a tool (serverless compute) | [Pricing](https://azure.microsoft.com/pricing/details/functions/) |
-| **OpenAPI** | Call any REST API described by an OpenAPI 3.x spec | Free (calls your API) |
-| **Microsoft Fabric** | Query Microsoft Fabric data through the agent | [Pricing](https://azure.microsoft.com/pricing/details/microsoft-fabric/) |
-| **SharePoint** | Ground the agent on SharePoint site content | [Pricing](https://www.microsoft.com/microsoft-365/business/compare-all-plans) |
-| **Azure Blob Storage** | Access files stored in Azure Blob Storage | [Pricing](https://azure.microsoft.com/pricing/details/storage/blobs/) |
-| **Connected Agent** | Call another agent as a tool for multi-agent orchestration | Free (agent-to-agent) |
-| **Logic Apps** | Trigger Azure Logic Apps workflows as tools | [Pricing](https://azure.microsoft.com/pricing/details/logic-apps/) |
+## How it works
 
-## Customization
+### Factory pattern
 
-1. **System prompt** — Edit [src/prompts/agent.prompty](src/prompts/agent.prompty)
-2. **Function tool** — Replace `src/tools/math.py` with your own domain logic
-3. **Agent name** — Set `AGENT_NAME` in `.env`
-4. **Model** — Set `MODEL_NAME` in `.env` (default: `gpt-4o`)
+Each agent is one entry in `src/agents/registry.py` plus a `.prompty` file. `src/setup.py` reads the registry, creates the agents via the Foundry SDK, and wires up `ConnectedAgentTool` references on the orchestrator. To add a new agent, add a registry entry and a prompt file — no orchestration code to write.
 
-## New Tools
+### Connected Agents
 
-1. Create a new Python file under `src/tools/` (e.g. `src/tools/weather.py`) and define one or more functions. Each function **must** have a docstring with `:param` and `:return` tags — the agent uses these to understand the function signature.
+The orchestrator delegates via `ConnectedAgentTool`, native to Foundry Agent Service. The service handles routing based on agent descriptions — no custom router or LLM-as-judge. The orchestrator's prompt tells it which kind of question belongs to which agent.
 
-   ```python
-   # src/tools/weather.py
-   def get_weather(city: str) -> str:
-       """Return the current weather for a city.
+### RAG with Azure AI Search
 
-       :param city: City name.
-       :return: Weather summary.
-       """
-       return f"Sunny, 22 °C in {city}"
-   ```
+The `KnowledgeAgent` has access to the `rail-knowledge` index via the `AzureAISearchTool`. It searches, retrieves relevant documents, and cites them in its response.
 
-2. Re-export the function in `src/tools/__init__.py`:
+### Operational analytics with Fabric
 
-   ```python
-   from .weather import get_weather
-   ```
+The `FabricAgent` (created in the Fabric portal) translates natural language to SQL against the lakehouse and returns results. Accessed in the demo through the Fabric UI alongside the main chat.
 
-3. Add the function to the `tools` set of the relevant agent in `src/agents/registry.py`:
+## Known limitations
 
-   ```python
-   from src.tools import add, get_weather
+**Connected Agents cannot call local Python function tools.** Sub-agents run server-side on Foundry, so they have no access to your local Python process. For this demo, we use Code Interpreter with detailed instructions to generate realistic data. For production, replace with:
 
-   AGENT_REGISTRY: dict = {
-       "default": {
-           ...
-           "tools": {add, get_weather},
-       },
-   }
-   ```
+- **Azure Functions** — for serverless function backends
+- **OpenAPI tools** — for existing REST APIs
+- **MCP servers** — for tool catalogs
 
-4. Run `python -m src.setup` to recreate the agent with the new tool attached.
+## Client demo flow
 
-## New Agents
+1. **Open with the business problem** (30s) — why railway operators need this
+2. **Slides 1–3** — architecture + scenario (2 min)
+3. **Frontend demo** (6 min) — 6 scenarios, Pipeline ON
+4. **Behind the scenes** (5 min) — Foundry portal, VS Code repo tour, Fabric data agent
+5. **Why Agent Service** — slide 4, business benefits (3 min)
+6. **Q&A** (3 min)
 
-1. Create a Prompty file for the agent's system prompt in `src/prompts/` (e.g. `src/prompts/travel.prompty`).
-
-2. Add a new entry to `AGENT_REGISTRY` in `src/agents/registry.py`:
-
-   ```python
-   AGENT_REGISTRY: dict = {
-       "default": { ... },
-       "travel": {
-           "name": "Travel Agent",
-           "prompt": "travel.prompty",
-           "model": None,        # None → uses MODEL_NAME from config
-           "tools": set(),       # add function tools here if needed
-       },
-   }
-   ```
-
-3. Run `python -m src.setup` — this creates all registered agents and writes their IDs to `.env`.
-
-4. Run the new agent:
-
-   ```bash
-   python -m src.main travel
-   ```
-
-## Infrastructure
-
-Bicep deploys:
-
-| Resource | Purpose |
-|---|---|
-| Azure AI Services (S0) | Microsoft Foundry hub + Agent Service data plane |
-| Storage Account (LRS) | Thread state, files, vector stores |
-| Bing Grounding (G1) | Web search for the Bing Grounding tool |
-| GPT-4o deployment | Model used by the agent |
-
----
-
-## Pricing
-
-### Microsoft Foundry Agent Service
-
-| Component | Price (East US) |
-|---|---|
-| **Model tokens** | $2.50 / 1M input, $10.00 / 1M output (GPT-4o) |
-| **Agent orchestration** | Free (thread management, tool dispatch) |
-
-### Infrastructure (idle)
-
-| Resource | Description | Pricing |
-|---|---|---|
-| **Azure AI Services** | Pay per token | [Pricing](https://azure.microsoft.com/pricing/details/cognitive-services/) |
-| **Storage Account** | Thread state, files, vector stores | [Pricing](https://azure.microsoft.com/pricing/details/storage/blobs/) |
-
-> Prices are approximate (East US, early 2026). See [Azure pricing](https://azure.microsoft.com/pricing/) for current rates.
-
-> [!WARNING]
-> **This repository is provided as-is as a quick-start template.**
->
-> 🔒 It is the deployer's sole responsibility to review, harden, and adapt this code to meet their organisation's security, compliance, privacy, and operational requirements before using it in any production environment.
->
-> 🚫 The creator(s) of this repository bear **no responsibility** for any security vulnerabilities, data breaches, compliance violations, service outages, or any other damages arising from the use or deployment of this code.
->
-> 🛠️ By using this repository you acknowledge that additional changes — including but not limited to network isolation, authentication hardening, secret management, logging, monitoring, and access control — may be required to achieve a production-ready security posture.
+See `SCRIPT-PRESENTATION.md` for the full speaker notes.
 
 ## Resources
 
-- 📖 [What is Microsoft Foundry Agent Service?](https://learn.microsoft.com/en-us/azure/ai-foundry/agents/overview) — explains what the service does, how agents work, and architectural concepts
-- 📖 [Quickstart: Deploy your first hosted agent](https://learn.microsoft.com/en-us/azure/ai-foundry/agents/quickstarts/quickstart-hosted-agent) — step-by-step guide to deploy a hosted agent using Azure Developer CLI
-- 📖 [Quickstart: Create a new Microsoft Foundry Agent Service project](https://learn.microsoft.com/azure/ai-foundry/agents/quickstart?pivots=ai-foundry-portal) — classic quickstart tutorial for creating and configuring an agent project
-- 📖 [Microsoft Foundry documentation](https://learn.microsoft.com/en-us/azure/ai-foundry/) — general hub for Microsoft Foundry including models, agents, and app templates
-- 🌐 [Microsoft Foundry Agent Service (product overview)](https://azure.microsoft.com/en-us/products/ai-agent-service/) — marketing + feature overview on the Azure site
+- [Azure AI Foundry Agent Service docs](https://learn.microsoft.com/en-us/azure/ai-services/agents/)
+- [Connected Agents overview](https://learn.microsoft.com/en-us/azure/ai-services/agents/how-to/connected-agents)
+- [Azure AI Search + Agents](https://learn.microsoft.com/en-us/azure/ai-services/agents/how-to/tools/azure-ai-search)
+- [Microsoft Fabric Data Agents](https://learn.microsoft.com/en-us/fabric/data-science/how-to-data-agent)
+- Starter kit — [NicoGrassetto/Foundry-Agent-Service-Starter-Kit](https://github.com/NicoGrassetto/Foundry-Agent-Service-Starter-Kit)
+
+## License
+
+Demo code. Provided as-is for reference.
