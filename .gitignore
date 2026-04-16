@@ -1,33 +1,7 @@
-# Python
+﻿node_modules/
 __pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-.venv/
-venv/
-env/
-
-# Azure Developer CLI
-.azure/
-
-# Environment
+*.pyc
 .env
-
-# Agent state
-.agent_id
-
-# IDE
+railassist-ui/dist/
+railassist-ui/node_modules/
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Bicep
-*.json
-!infra/**/*.json

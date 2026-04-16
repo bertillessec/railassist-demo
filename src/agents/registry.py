@@ -1,23 +1,42 @@
-"""Agent registry – declarative configuration for all agents.
+﻿"""Agent registry - declarative configuration for all RailAssist agents."""
 
-To add a new agent:
-1. Add an entry to AGENT_REGISTRY below.
-2. Create a matching .prompty file in src/prompts/.
-3. Run `python -m src.setup` to create all agents on the service.
-"""
+from src.tools import (
+    get_next_departures, search_connection, get_train_status,
+    lookup_ticket, check_subscription, submit_delay_compensation, get_fare_estimate,
+    get_active_disruptions, get_planned_works, report_incident,
+)
 
-from src.tools import add
-
-# Each entry maps a unique agent key to its configuration.
-# - name:    Display name used when creating the agent on the service.
-# - prompt:  Filename inside src/prompts/ (Prompty format).
-# - model:   Model deployment name (can be overridden per agent).
-# - tools:   Set of callable functions exposed via FunctionTool.
 AGENT_REGISTRY: dict = {
-    "default": {
-        "name": "Agent",
-        "prompt": "agent.prompty",
-        "model": None,         # None → falls back to MODEL_NAME from config
-        "tools": {add},
+    "schedule": {
+        "name": "TrainScheduleAgent",
+        "prompt": "schedule.prompty",
+        "model": None,
+        "tools": {get_next_departures, search_connection, get_train_status},
+        "description": "Handles train timetables, departures, connections, real-time tracking, and platform information.",
+        "is_sub": True,
+    },
+    "passenger": {
+        "name": "PassengerServiceAgent",
+        "prompt": "passenger.prompty",
+        "model": None,
+        "tools": {lookup_ticket, check_subscription, submit_delay_compensation, get_fare_estimate},
+        "description": "Handles tickets, subscriptions, fare estimates, refunds, and delay compensation claims.",
+        "is_sub": True,
+    },
+    "incident": {
+        "name": "IncidentAgent",
+        "prompt": "incident.prompty",
+        "model": None,
+        "tools": {get_active_disruptions, get_planned_works, report_incident},
+        "description": "Handles active disruptions, planned engineering works, incident reporting, and alternative transport.",
+        "is_sub": True,
+    },
+    "railassist": {
+        "name": "RailAssist",
+        "prompt": "railassist.prompty",
+        "model": None,
+        "tools": set(),
+        "description": "Central orchestrator that delegates to specialised railway sub-agents.",
+        "is_sub": False,
     },
 }

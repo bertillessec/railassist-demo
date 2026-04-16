@@ -1,0 +1,73 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RailAssist</title>
+<style>
+:root{--d:#0F1923;--n:#1A2B3D;--b:#2E7DDB;--c:#38BDF8;--g:#22C55E;--s:#162232;--br:#2A3F55;--t:#E2E8F0;--m:#8899AA;--cd:#1E3248}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:var(--d);color:var(--t);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.h{background:var(--n);border-bottom:1px solid var(--br);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem}
+.logo{width:36px;height:36px;background:linear-gradient(135deg,var(--b),var(--c));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff}
+.ht{font-size:1.1rem;font-weight:700}.hs{font-size:.72rem;color:var(--m);font-family:monospace}
+.st{margin-left:auto;display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:var(--g)}
+.dot{width:8px;height:8px;background:var(--g);border-radius:50%;animation:p 2s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.5}}
+.ab{background:var(--s);border-bottom:1px solid var(--br);padding:.5rem 1.5rem;display:flex;gap:.5rem;overflow-x:auto}
+.ac{padding:.35rem .75rem;border-radius:20px;font-size:.78rem;font-weight:500;border:1px solid var(--br);background:transparent;color:var(--m);cursor:pointer;transition:all .2s;white-space:nowrap}
+.ac:hover{border-color:var(--b);color:var(--t)}.ac.on{background:var(--b);border-color:var(--b);color:#fff}
+.ch{flex:1;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:1rem}
+.mg{max-width:75%;padding:.85rem 1.1rem;border-radius:12px;font-size:.9rem;line-height:1.55;animation:fi .3s ease}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.mg.u{align-self:flex-end;background:var(--b);color:#fff;border-bottom-right-radius:4px}
+.mg.a{align-self:flex-start;background:var(--cd);border:1px solid var(--br);border-bottom-left-radius:4px}
+.mg .lb{font-size:.7rem;font-weight:600;color:var(--c);margin-bottom:.3rem;font-family:monospace;text-transform:uppercase;letter-spacing:.05em}
+.mg.sy{align-self:center;max-width:90%;background:transparent;border:1px dashed var(--br);color:var(--m);font-size:.8rem;text-align:center}
+.wl{text-align:center;padding:2rem 1rem}
+.wl h2{font-size:1.4rem;margin-bottom:.3rem;background:linear-gradient(135deg,var(--b),var(--c));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.wl p{color:var(--m);font-size:.85rem;max-width:480px;margin:0 auto}
+.qa{padding:.5rem 1.5rem;display:flex;gap:.4rem;flex-wrap:wrap}
+.qb{padding:.3rem .65rem;border-radius:16px;font-size:.75rem;border:1px solid var(--br);background:var(--s);color:var(--t);cursor:pointer;transition:all .15s}
+.qb:hover{background:var(--cd);border-color:var(--b)}
+.ia{background:var(--n);border-top:1px solid var(--br);padding:.75rem 1.5rem;display:flex;gap:.75rem;align-items:center}
+.ia input{flex:1;background:var(--s);border:1px solid var(--br);border-radius:10px;padding:.65rem 1rem;font-size:.9rem;color:var(--t);font-family:inherit;outline:none}
+.ia input:focus{border-color:var(--b)}.ia input::placeholder{color:var(--m)}
+.sb{width:40px;height:40px;border-radius:10px;background:var(--b);border:none;color:#fff;font-size:1.1rem;cursor:pointer}
+.sb:hover{background:#2568B8}
+</style>
+</head>
+<body>
+<div class="h"><div class="logo">R</div><div><div class="ht">RailAssist</div><div class="hs">Foundry Agent Service | Multi-Agent Demo</div></div><div class="st"><span class="dot"></span>4 agents</div></div>
+<div class="ab">
+<button class="ac on" data-a="railassist">RailAssist</button>
+<button class="ac" data-a="schedule">Horaires</button>
+<button class="ac" data-a="passenger">Voyageurs</button>
+<button class="ac" data-a="incident">Perturbations</button>
+</div>
+<div class="ch" id="ch"><div class="wl"><h2>Bienvenue sur RailAssist</h2><p>Multi-agent AI - Azure AI Foundry Agent Service</p></div></div>
+<div class="qa">
+<button class="qb" onclick="sq('Prochains departs Bruxelles-Midi ?')">Departs Bxl-Midi</button>
+<button class="qb" onclick="sq('Connexion Namur Liege 14h30')">Connexion</button>
+<button class="qb" onclick="sq('Perturbations en ce moment ?')">Perturbations</button>
+<button class="qb" onclick="sq('Prix Bruxelles Bruges ?')">Tarif</button>
+<button class="qb" onclick="sq('Train IC1832 45min retard, compensation ?')">Compensation</button>
+</div>
+<div class="ia"><input id="inp" placeholder="Posez votre question..." onkeydown="if(event.key==='Enter')send()"><button class="sb" onclick="send()">&rarr;</button></div>
+<script>
+const ch=document.getElementById('ch'),inp=document.getElementById('inp');let act='railassist';
+const L={railassist:'RailAssist',schedule:'TrainScheduleAgent',passenger:'PassengerServiceAgent',incident:'IncidentAgent'};
+document.querySelectorAll('.ac').forEach(c=>c.addEventListener('click',()=>{document.querySelectorAll('.ac').forEach(x=>x.classList.remove('on'));c.classList.add('on');act=c.dataset.a;sm('Agent: '+c.textContent.trim());}));
+const R={schedule:["Prochains departs Bruxelles-Midi:\n\nIC 1523 > Liege | 14:22 | Voie 3 | A l'heure\nS1 4087 > Anvers | 14:28 | Voie 7 | +5 min\nIC 2841 > Namur | 14:35 | Voie 12 | A l'heure"],
+passenger:["Tarif Bruxelles > Bruges:\n\nStandard aller: 15,20 EUR\nConfort aller: 23,50 EUR\nWeekend: 7,60 EUR\nEnfants < 12: gratuit"],
+incident:["Perturbations actives:\n\nL25 Bruxelles-Liege | Panne signalisation\nDepuis 11:30 | Resolution: 16:00\nBus remplacement Louvain-Liege\n23 trains impactes"]};
+function am(t,c,ag){const d=document.createElement('div');d.className='mg '+c;d.innerHTML=c==='a'&&ag?'<div class="lb">'+L[ag]+'</div>'+t.replace(/\n/g,'<br>'):t;ch.appendChild(d);ch.scrollTop=ch.scrollHeight;}
+function sm(t){const d=document.createElement('div');d.className='mg sy';d.textContent=t;ch.appendChild(d);ch.scrollTop=ch.scrollHeight;}
+async function rsp(q){const ql=q.toLowerCase();let ra=act;
+if(act==='railassist'){if(ql.match(/depart|connexion|horaire/))ra='schedule';else if(ql.match(/prix|tarif|billet|compens|abonnement/))ra='passenger';else if(ql.match(/perturbat|retard|travaux|incident/))ra='incident';else ra='schedule';}
+if(act==='railassist'&&ra!=='railassist'){await new Promise(r=>setTimeout(r,500));sm('RailAssist > '+L[ra]);await new Promise(r=>setTimeout(r,400));}
+const rs=R[ra]||R.schedule;await new Promise(r=>setTimeout(r,800+Math.random()*600));am(rs[0],'a',ra);}
+function send(){const t=inp.value.trim();if(!t)return;am(t,'u');inp.value='';rsp(t);}
+function sq(t){inp.value=t;send();}
+</script>
+</body>
+</html>
