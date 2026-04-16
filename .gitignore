@@ -5,3 +5,4 @@ __pycache__/
 railassist-ui/dist/
 railassist-ui/node_modules/
 .vscode/
+connection.yml
